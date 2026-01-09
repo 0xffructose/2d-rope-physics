@@ -46,8 +46,8 @@ Vector2 vec2mulf(Vector2 a , float b) {
 void DisplayRope() {
     for (int i = 0; i < MAX_PARTICLE_COUNT; i++) {
         if (DEBUG_CIRCLES) DrawCircle(PARTICLES[i].position.x , PARTICLES[i].position.y , 10 , WHITE);
-        if (i != MAX_PARTICLE_COUNT - 1) DrawLine(PARTICLES[i].position.x , PARTICLES[i].position.y , PARTICLES[i+1].position.x , PARTICLES[i+1].position.y , PARTICLES[i].color);
-        else DrawLine(PARTICLES[i].position.x , PARTICLES[i].position.y , PARTICLES[i].position.x , PARTICLES[i].position.y, PARTICLES[i].color);
+        if (i != MAX_PARTICLE_COUNT - 1) DrawLineEx(PARTICLES[i].position , PARTICLES[i+1].position , 5.0 , PARTICLES[i].color);
+        else DrawLineEx(PARTICLES[i].position , PARTICLES[i].position , 5 , PARTICLES[i].color);
     }
 }
 
