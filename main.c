@@ -13,6 +13,7 @@
 #define MAX_CONSTRAINT_ITERATION 5
 
 #define GRAVITY 980.0
+#define DAMPING 0.98
 
 typedef struct Particle {
     bool pinned; 
@@ -62,6 +63,10 @@ void UpdateRope(float deltaTime) {
         PARTICLES[i].acceleration.y += GRAVITY;
 
         Vector2 velocity = { PARTICLES[i].position.x - PARTICLES[i].previous_position.x , PARTICLES[i].position.y - PARTICLES[i].previous_position.y };
+    
+        velocity.x *= DAMPING;
+        velocity.y *= DAMPING;
+
         PARTICLES[i].previous_position = PARTICLES[i].position;
         PARTICLES[i].position = vec2sum(vec2sum(PARTICLES[i].position , velocity) , vec2mulf(PARTICLES[i].acceleration , deltaTime * deltaTime));
         PARTICLES[i].acceleration = (Vector2) { 0 , 0 };
