@@ -12,7 +12,7 @@
 
 #define MAX_CONSTRAINT_ITERATION 5
 
-#define GRAVITY 9.8
+#define GRAVITY 980.0
 
 typedef struct Particle {
     bool pinned; 
@@ -55,6 +55,7 @@ void UpdateRope(float deltaTime) {
         
         if (PARTICLES[i].pinned) {
             PARTICLES[i].position = (Vector2) { GetMousePosition().x , GetMousePosition().y };
+            PARTICLES[i].previous_position = PARTICLES[i].position;
             continue;
         }
 
@@ -87,15 +88,19 @@ void UpdateConstraintRope() {
             n.y * difference * 0.5f
         };
 
-        PARTICLES[i].position.x += c.x;
-        PARTICLES[i].position.y += c.y;
-        PARTICLES[i].previous_position.x += c.x;
-        PARTICLES[i].previous_position.y += c.y;
+        if (!PARTICLES[i].pinned) {
+            PARTICLES[i].position.x += c.x;
+            PARTICLES[i].position.y += c.y;
+        }
+        // PARTICLES[i].previous_position.x += c.x;
+        // PARTICLES[i].previous_position.y += c.y;
 
-        PARTICLES[i+1].position.x -= c.x;
-        PARTICLES[i+1].position.y -= c.y;
-        PARTICLES[i+1].previous_position.x -= c.x;
-        PARTICLES[i+1].previous_position.y -= c.y;
+        if (!PARTICLES[i+1].pinned) {
+            PARTICLES[i+1].position.x -= c.x;
+            PARTICLES[i+1].position.y -= c.y;
+        }
+        // PARTICLES[i+1].previous_position.x -= c.x;
+        // PARTICLES[i+1].previous_position.y -= c.y;
 
     }
 }
