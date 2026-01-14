@@ -7,8 +7,8 @@
 #define WIDTH 640
 #define HEIGHT 640
 
-#define MAX_PARTICLE_COUNT 10
-#define MAX_PARTICLE_DISTANCE 30.0
+#define MAX_PARTICLE_COUNT 20
+#define MAX_PARTICLE_DISTANCE 20
 
 #define MAX_CONSTRAINT_ITERATION 5
 
@@ -26,8 +26,9 @@ typedef struct Particle {
     Color color;
 } Particle;
 
-Particle PARTICLES[MAX_PARTICLE_COUNT];
+Particle PARTICLES[MAX_PARTICLE_COUNT + 1];
 bool ROPE_INITIALIZED = false;
+int PINNABLE = 0;
 
 bool DEBUG_CIRCLES = false;
 
@@ -44,37 +45,40 @@ Vector2 vec2mulf(Vector2 a , float b) {
 }
 
 void DisplayRope() {
-    for (int i = 0; i < MAX_PARTICLE_COUNT; i++) {
+    for (int i = 0; i < MAX_PARTICLE_COUNT + 1; i++) {
         if (DEBUG_CIRCLES) DrawCircle(PARTICLES[i].position.x , PARTICLES[i].position.y , 10 , WHITE);
-        if (i != MAX_PARTICLE_COUNT - 1) DrawLineEx(PARTICLES[i].position , PARTICLES[i+1].position , 5.0 , PARTICLES[i].color);
+        if (i != MAX_PARTICLE_COUNT + 1 - 1) DrawLineEx(PARTICLES[i].position , PARTICLES[i+1].position , 5.0 , PARTICLES[i].color);
         else DrawLineEx(PARTICLES[i].position , PARTICLES[i].position , 5 , PARTICLES[i].color);
     }
 }
 
 void UpdateRope(float deltaTime) {
-    for (int i = 0; i < MAX_PARTICLE_COUNT; i++) {
+    for (int i = 0; i < MAX_PARTICLE_COUNT + 1; i++) {
         
-        if (PARTICLES[i].pinned) {
-            PARTICLES[i].position = (Vector2) { GetMousePosition().x , GetMousePosition().y };
+        if (!PARTICLES[i].pinned) {
+            if (i == PINNABLE) {
+                PARTICLES[i].position = (Vector2) { GetMousePosition().x , GetMousePosition().y };
+                PARTICLES[i].previous_position = PARTICLES[i].position;
+                continue;
+            }
+
+            PARTICLES[i].acceleration.y += GRAVITY;
+
+            Vector2 velocity = { PARTICLES[i].position.x - PARTICLES[i].previous_position.x , PARTICLES[i].position.y - PARTICLES[i].previous_position.y };
+        
+            velocity.x *= DAMPING;
+            velocity.y *= DAMPING;
+
             PARTICLES[i].previous_position = PARTICLES[i].position;
-            continue;
+            PARTICLES[i].position = vec2sum(vec2sum(PARTICLES[i].position , velocity) , vec2mulf(PARTICLES[i].acceleration , deltaTime * deltaTime));
+            PARTICLES[i].acceleration = (Vector2) { 0 , 0 };
+
         }
-
-        PARTICLES[i].acceleration.y += GRAVITY;
-
-        Vector2 velocity = { PARTICLES[i].position.x - PARTICLES[i].previous_position.x , PARTICLES[i].position.y - PARTICLES[i].previous_position.y };
-    
-        velocity.x *= DAMPING;
-        velocity.y *= DAMPING;
-
-        PARTICLES[i].previous_position = PARTICLES[i].position;
-        PARTICLES[i].position = vec2sum(vec2sum(PARTICLES[i].position , velocity) , vec2mulf(PARTICLES[i].acceleration , deltaTime * deltaTime));
-        PARTICLES[i].acceleration = (Vector2) { 0 , 0 };
     }
 }
 
 void UpdateConstraintRope() {
-    for (int i = 0; i < MAX_PARTICLE_COUNT - 1; i++) {
+    for (int i = 0; i < MAX_PARTICLE_COUNT + 1 - 1; i++) {
 
         Vector2 d = {
             PARTICLES[i+1].position.x - PARTICLES[i].position.x,
@@ -112,7 +116,7 @@ void UpdateConstraintRope() {
 
 int main(void) {
 
-    InitWindow(WIDTH , HEIGHT , "2D Raylib Physics");
+    InitWindow(WIDTH , HEIGHT , "2D Rope Physics");
     SetTargetFPS(60);
 
     while (!WindowShouldClose()) {
@@ -120,14 +124,14 @@ int main(void) {
         ClearBackground(BLACK);
 
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !ROPE_INITIALIZED) {
-            for (int i = 0; i < MAX_PARTICLE_COUNT; i++) {              
+            for (int i = 0; i < MAX_PARTICLE_COUNT + 1; i++) {              
 
                 Vector2 position = { GetMousePosition().x , GetMousePosition().y + MAX_PARTICLE_DISTANCE * i };
                 Vector2 previous_position = position;
 
                 Color color = { rand() % 256 , rand() % 256 , rand() % 256 , 255 };
 
-                PARTICLES[i] = (Particle){ i == 0 ? true : false , position , previous_position , (Vector2){ 0 , 0 } , color};
+                PARTICLES[i] = (Particle){ false , position , previous_position , (Vector2){ 0 , 0 } , color};
             }
             ROPE_INITIALIZED = true;
         }
@@ -136,6 +140,11 @@ int main(void) {
             DEBUG_CIRCLES = !DEBUG_CIRCLES;
         }
 
+        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+            if (!PARTICLES[0].pinned) { PARTICLES[0].pinned = true; PINNABLE = MAX_PARTICLE_COUNT; }
+            else PARTICLES[MAX_PARTICLE_COUNT].pinned = true; 
+        }
+ 
         if (ROPE_INITIALIZED) {
             DisplayRope();
             UpdateRope(GetFrameTime());
