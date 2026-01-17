@@ -3,6 +3,7 @@
 #include <math.h>
 
 #include <raylib.h>
+#include <raymath.h>
 
 #define WIDTH 640
 #define HEIGHT 640
@@ -26,91 +27,106 @@ typedef struct Particle {
     Color color;
 } Particle;
 
-Particle PARTICLES[MAX_PARTICLE_COUNT + 1];
-bool ROPE_INITIALIZED = false;
+typedef struct Rope {
+    Particle PARTICLES[MAX_PARTICLE_COUNT + 1];
+} Rope;
+
+typedef struct Ropes {
+    Rope *items;
+    size_t count;
+    size_t capacity;
+} Ropes;
+
+#define append_rope(ropes , rope) \
+    do {\
+        if (ropes.count >= ropes.capacity) {\
+            if (ropes.capacity == 0) ropes.capacity = 1024;\
+            else ropes.capacity *= 2;\
+            ropes.items = realloc(ropes.items , ropes.capacity * sizeof(*ropes.items));\
+        }\
+        ropes.items[ropes.count++] = rope;\
+    } while (0)
+
+// Particle PARTICLES[MAX_PARTICLE_COUNT + 1]; // 672 BYTE
+Ropes ROPES = { .items = NULL , .count = 0 , .capacity = 0 };
+
+// bool ROPE_INITIALIZED = false;
+
+int ACTIVE_ROPE = -1;
 int PINNABLE = 0;
 
 bool DEBUG_CIRCLES = false;
 
-Vector2 vec2sum(Vector2 a , Vector2 b) {
-    return (Vector2) { a.x + b.x , a.y + b.y }; 
-}
-
-Vector2 vec2sub(Vector2 a , Vector2 b) {
-    return (Vector2) { a.x - b.x , a.y - b.y }; 
-}
-
-Vector2 vec2mulf(Vector2 a , float b) {
-    return (Vector2) { a.x * b , a.y * b };
-}
-
 void DisplayRope() {
-    for (int i = 0; i < MAX_PARTICLE_COUNT + 1; i++) {
-        if (DEBUG_CIRCLES) DrawCircle(PARTICLES[i].position.x , PARTICLES[i].position.y , 10 , WHITE);
-        if (i != MAX_PARTICLE_COUNT + 1 - 1) DrawLineEx(PARTICLES[i].position , PARTICLES[i+1].position , 5.0 , PARTICLES[i].color);
-        else DrawLineEx(PARTICLES[i].position , PARTICLES[i].position , 5 , PARTICLES[i].color);
+    for (int i = 0; i < ROPES.count; i++) {
+        for (int j = 0; j < MAX_PARTICLE_COUNT + 1; j++) {
+            if (DEBUG_CIRCLES) DrawCircle(ROPES.items[i].PARTICLES[j].position.x , ROPES.items[i].PARTICLES[j].position.y , 10 , WHITE);
+            if (j != MAX_PARTICLE_COUNT + 1 - 1) DrawLineEx(ROPES.items[i].PARTICLES[j].position , ROPES.items[i].PARTICLES[j+1].position , 5.0 , ROPES.items[i].PARTICLES[j].color);
+            else DrawLineEx(ROPES.items[i].PARTICLES[j].position , ROPES.items[i].PARTICLES[j].position , 5 , ROPES.items[i].PARTICLES[j].color);
+        }
     }
 }
 
 void UpdateRope(float deltaTime) {
-    for (int i = 0; i < MAX_PARTICLE_COUNT + 1; i++) {
-        
-        if (!PARTICLES[i].pinned) {
-            if (i == PINNABLE) {
-                PARTICLES[i].position = (Vector2) { GetMousePosition().x , GetMousePosition().y };
-                PARTICLES[i].previous_position = PARTICLES[i].position;
-                continue;
+    for (int i = 0; i < ROPES.count; i++) {
+        for (int j = 0; j < MAX_PARTICLE_COUNT + 1; j++) {
+            if (!ROPES.items[i].PARTICLES[j].pinned) {
+                if (j == PINNABLE) {
+                    ROPES.items[i].PARTICLES[j].position = (Vector2) { GetMousePosition().x , GetMousePosition().y };
+                    ROPES.items[i].PARTICLES[j].previous_position = ROPES.items[i].PARTICLES[j].position;
+                    continue;
+                }
+
+                ROPES.items[i].PARTICLES[j].acceleration.y += GRAVITY;
+
+                Vector2 velocity = { ROPES.items[i].PARTICLES[j].position.x - ROPES.items[i].PARTICLES[j].previous_position.x , ROPES.items[i].PARTICLES[j].position.y - ROPES.items[i].PARTICLES[j].previous_position.y };
+            
+                velocity.x *= DAMPING;
+                velocity.y *= DAMPING;
+
+                ROPES.items[i].PARTICLES[j].previous_position = ROPES.items[i].PARTICLES[j].position;
+                ROPES.items[i].PARTICLES[j].position = Vector2Add(Vector2Add(ROPES.items[i].PARTICLES[j].position , velocity) , Vector2Scale(ROPES.items[i].PARTICLES[j].acceleration , deltaTime * deltaTime));
+                ROPES.items[i].PARTICLES[j].acceleration = (Vector2) { 0 , 0 };
+
             }
-
-            PARTICLES[i].acceleration.y += GRAVITY;
-
-            Vector2 velocity = { PARTICLES[i].position.x - PARTICLES[i].previous_position.x , PARTICLES[i].position.y - PARTICLES[i].previous_position.y };
-        
-            velocity.x *= DAMPING;
-            velocity.y *= DAMPING;
-
-            PARTICLES[i].previous_position = PARTICLES[i].position;
-            PARTICLES[i].position = vec2sum(vec2sum(PARTICLES[i].position , velocity) , vec2mulf(PARTICLES[i].acceleration , deltaTime * deltaTime));
-            PARTICLES[i].acceleration = (Vector2) { 0 , 0 };
-
         }
     }
 }
 
 void UpdateConstraintRope() {
-    for (int i = 0; i < MAX_PARTICLE_COUNT + 1 - 1; i++) {
+    for (int i = 0; i < ROPES.count; i++) {
+        for (int j = 0; j < MAX_PARTICLE_COUNT + 1 - 1; j++) {
+            Vector2 d = {   
+                ROPES.items[i].PARTICLES[j+1].position.x - ROPES.items[i].PARTICLES[j].position.x,
+                ROPES.items[i].PARTICLES[j+1].position.y - ROPES.items[i].PARTICLES[j].position.y
+            };
 
-        Vector2 d = {
-            PARTICLES[i+1].position.x - PARTICLES[i].position.x,
-            PARTICLES[i+1].position.y - PARTICLES[i].position.y
-        };
+            float l = sqrt(pow(d.x , 2) + pow(d.y , 2));
+            if (l < 0.0001f) continue;
 
-        float l = sqrt(pow(d.x , 2) + pow(d.y , 2));
-        if (l < 0.0001f) continue;
+            Vector2 n = { d.x / l , d.y / l };
 
-        Vector2 n = { d.x / l , d.y / l };
+            float difference = l - MAX_PARTICLE_DISTANCE;
+            
+            Vector2 c = {
+                n.x * difference * 0.5f,
+                n.y * difference * 0.5f
+            };
 
-        float difference = l - MAX_PARTICLE_DISTANCE;
-        
-        Vector2 c = {
-            n.x * difference * 0.5f,
-            n.y * difference * 0.5f
-        };
+            if (!ROPES.items[i].PARTICLES[j].pinned) {
+                ROPES.items[i].PARTICLES[j].position.x += c.x;
+                ROPES.items[i].PARTICLES[j].position.y += c.y;
+            }
+            // PARTICLES[i].previous_position.x += c.x;
+            // PARTICLES[i].previous_position.y += c.y;
 
-        if (!PARTICLES[i].pinned) {
-            PARTICLES[i].position.x += c.x;
-            PARTICLES[i].position.y += c.y;
+            if (!ROPES.items[i].PARTICLES[j+1].pinned) {
+                ROPES.items[i].PARTICLES[j+1].position.x -= c.x;
+                ROPES.items[i].PARTICLES[j+1].position.y -= c.y;
+            }
+            // PARTICLES[i+1].previous_position.x -= c.x;
+            // PARTICLES[i+1].previous_position.y -= c.y;
         }
-        // PARTICLES[i].previous_position.x += c.x;
-        // PARTICLES[i].previous_position.y += c.y;
-
-        if (!PARTICLES[i+1].pinned) {
-            PARTICLES[i+1].position.x -= c.x;
-            PARTICLES[i+1].position.y -= c.y;
-        }
-        // PARTICLES[i+1].previous_position.x -= c.x;
-        // PARTICLES[i+1].previous_position.y -= c.y;
-
     }
 }
 
@@ -123,7 +139,10 @@ int main(void) {
         BeginDrawing();
         ClearBackground(BLACK);
 
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !ROPE_INITIALIZED) {
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && ACTIVE_ROPE == -1) {
+
+            Rope ROPE = { 0 };
+
             for (int i = 0; i < MAX_PARTICLE_COUNT + 1; i++) {              
 
                 Vector2 position = { GetMousePosition().x , GetMousePosition().y + MAX_PARTICLE_DISTANCE * i };
@@ -131,9 +150,14 @@ int main(void) {
 
                 Color color = { rand() % 256 , rand() % 256 , rand() % 256 , 255 };
 
-                PARTICLES[i] = (Particle){ false , position , previous_position , (Vector2){ 0 , 0 } , color};
+                ROPE.PARTICLES[i] = (Particle){ false , position , previous_position , (Vector2){ 0 , 0 } , color};
             }
-            ROPE_INITIALIZED = true;
+
+            append_rope(ROPES , ROPE);
+            
+            ACTIVE_ROPE = ROPES.count - 1;
+            PINNABLE = 0;
+            // ROPE_INITIALIZED = true;
         }
 
         if (IsKeyPressed(KEY_D)) {
@@ -141,11 +165,11 @@ int main(void) {
         }
 
         if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-            if (!PARTICLES[0].pinned) { PARTICLES[0].pinned = true; PINNABLE = MAX_PARTICLE_COUNT; }
-            else PARTICLES[MAX_PARTICLE_COUNT].pinned = true; 
+            if (!ROPES.items[ACTIVE_ROPE].PARTICLES[0].pinned) { ROPES.items[ACTIVE_ROPE].PARTICLES[0].pinned = true; PINNABLE = MAX_PARTICLE_COUNT; }
+            else { ROPES.items[ACTIVE_ROPE].PARTICLES[MAX_PARTICLE_COUNT].pinned = true; ACTIVE_ROPE = -1; }
         }
  
-        if (ROPE_INITIALIZED) {
+        if (ROPES.count > 0) {
             DisplayRope();
             UpdateRope(GetFrameTime());
             for (int i = 0; i < MAX_CONSTRAINT_ITERATION; i++) {
@@ -157,6 +181,14 @@ int main(void) {
     }
 
     CloseWindow();
+
+    if (ROPES.items != NULL) {
+        free(ROPES.items);
+        ROPES.items = NULL;
+    }
+
+    ROPES.count = 0;
+    ROPES.capacity = 0;
 
     return 0;
 }
